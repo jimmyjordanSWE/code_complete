@@ -96,6 +96,27 @@ function activate(context) {
   statusBarItem.show();
   updateStatusBar();
 
+  const selector = [
+    { language: "c", scheme: "file" },
+    { language: "cpp", scheme: "file" }
+  ];
+
+  const hoverProvider = vscode.languages.registerHoverProvider(selector, {
+    provideHover(document, position) {
+      if (!isEnabled() || lockedScope) {
+        return undefined;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.toString() !== document.uri.toString()) {
+        return undefined;
+      }
+
+      updatePreviewForPosition(editor, position);
+      return undefined;
+    }
+  });
+
   const onSelectionChange = vscode.window.onDidChangeTextEditorSelection((event) => {
     if (!isEnabled()) {
       return;
@@ -175,6 +196,7 @@ function activate(context) {
     copyLockedCommand,
     toggleCommand,
     statusBarItem,
+    hoverProvider,
     onSelectionChange,
     onEditorChange,
     onDocChange,
@@ -401,8 +423,10 @@ function buildClipboardPayload(document, range) {
 }
 
 function getLogicalScope(document, position) {
+  const anchorLine = resolveAnchorLineForScope(document, position.line);
+  const anchorPos = new vscode.Position(anchorLine, 0);
   const braceIndex = getBraceIndex(document);
-  const containingScopes = getContainingBraceScopesByLine(braceIndex, position.line);
+  const containingScopes = getContainingBraceScopesByLine(braceIndex, anchorLine);
 
   if (containingScopes.length > 0) {
     return {
@@ -411,7 +435,7 @@ function getLogicalScope(document, position) {
   }
 
   const text = braceIndex.text;
-  const forwardHeaderScope = findForwardHeaderBraceScope(document, text, position);
+  const forwardHeaderScope = findForwardHeaderBraceScope(document, text, anchorPos);
   if (forwardHeaderScope) {
     return {
       range: forwardHeaderScope
@@ -419,8 +443,30 @@ function getLogicalScope(document, position) {
   }
 
   return {
-    range: fullLineRange(document, position.line, position.line)
+    range: fullLineRange(document, anchorLine, anchorLine)
   };
+}
+
+function resolveAnchorLineForScope(document, lineNumber) {
+  const safeLine = Math.max(0, Math.min(lineNumber, document.lineCount - 1));
+  if (!document.lineAt(safeLine).isEmptyOrWhitespace) {
+    return safeLine;
+  }
+
+  const maxProbe = 24;
+  for (let delta = 1; delta <= maxProbe; delta += 1) {
+    const up = safeLine - delta;
+    if (up >= 0 && !document.lineAt(up).isEmptyOrWhitespace) {
+      return up;
+    }
+
+    const down = safeLine + delta;
+    if (down < document.lineCount && !document.lineAt(down).isEmptyOrWhitespace) {
+      return down;
+    }
+  }
+
+  return safeLine;
 }
 
 function getBraceIndex(document) {

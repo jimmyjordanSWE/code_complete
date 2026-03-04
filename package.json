@@ -58,6 +58,10 @@
           "description": "Automatically copy locked scope payload to clipboard."
         }
       }
+    },
+    "configurationDefaults": {
+      "editor.hover.delay": 0,
+      "editor.hover.sticky": false
     }
   }
 }

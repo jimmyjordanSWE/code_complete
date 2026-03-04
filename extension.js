@@ -35,6 +35,7 @@ function activate(context) {
 
   const lockCommand = vscode.commands.registerCommand("scopeHover.lockScope", async () => {
     if (!isEnabled()) {
+      vscode.window.showInformationMessage("Scope Hover is OFF. Turn it on from the status bar first.");
       return;
     }
 
@@ -88,6 +89,10 @@ function activate(context) {
     }
 
     updateStatusBar();
+  });
+
+  const openSettingsUiCommand = vscode.commands.registerCommand("scopeHover.openSettingsUI", async () => {
+    openSettingsUi(context);
   });
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -195,6 +200,7 @@ function activate(context) {
     unlockCommand,
     copyLockedCommand,
     toggleCommand,
+    openSettingsUiCommand,
     statusBarItem,
     hoverProvider,
     onSelectionChange,
@@ -221,6 +227,15 @@ async function setEnabled(value) {
   await vscode.workspace.getConfiguration().update("scopeHover.enabled", value, target);
 }
 
+function getConfigTarget() {
+  const hasWorkspace = Array.isArray(vscode.workspace.workspaceFolders) && vscode.workspace.workspaceFolders.length > 0;
+  return hasWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+}
+
+async function updateConfigValue(key, value) {
+  await vscode.workspace.getConfiguration().update(key, value, getConfigTarget());
+}
+
 function shouldCopyOnLock() {
   return vscode.workspace.getConfiguration().get("scopeHover.copyOnLock", true);
 }
@@ -239,6 +254,116 @@ function updateStatusBar() {
   const lockSuffix = lockedScope ? " | LOCKED" : "";
   statusBarItem.text = `$(eye) Scope Hover: ON${lockSuffix}`;
   statusBarItem.backgroundColor = undefined;
+}
+
+function openSettingsUi(context) {
+  const panel = vscode.window.createWebviewPanel(
+    "scopeHoverSettings",
+    "Scope Hover Settings",
+    vscode.ViewColumn.Beside,
+    { enableScripts: true }
+  );
+
+  const render = () => {
+    const cfg = vscode.workspace.getConfiguration();
+    const enabled = cfg.get("scopeHover.enabled", true);
+    const copyOnLock = cfg.get("scopeHover.copyOnLock", true);
+    const hoverDelay = cfg.get("editor.hover.delay", 0);
+    const hoverSticky = cfg.get("editor.hover.sticky", false);
+
+    panel.webview.html = getSettingsHtml({
+      enabled,
+      copyOnLock,
+      hoverDelay,
+      hoverSticky
+    });
+  };
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (!msg || msg.type !== "save") {
+      return;
+    }
+
+    await Promise.all([
+      updateConfigValue("scopeHover.enabled", !!msg.payload.enabled),
+      updateConfigValue("scopeHover.copyOnLock", !!msg.payload.copyOnLock),
+      updateConfigValue("editor.hover.delay", Number.isFinite(msg.payload.hoverDelay) ? msg.payload.hoverDelay : 0),
+      updateConfigValue("editor.hover.sticky", !!msg.payload.hoverSticky)
+    ]);
+
+    updateStatusBar();
+    renderCurrentEditor();
+    vscode.window.setStatusBarMessage("Scope Hover settings saved", 1600);
+    render();
+  });
+
+  panel.onDidDispose(() => {
+    // no-op
+  });
+
+  render();
+}
+
+function getSettingsHtml(values) {
+  const enabledChecked = values.enabled ? "checked" : "";
+  const copyOnLockChecked = values.copyOnLock ? "checked" : "";
+  const hoverStickyChecked = values.hoverSticky ? "checked" : "";
+  const safeHoverDelay = Number.isFinite(values.hoverDelay) ? values.hoverDelay : 0;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scope Hover Settings</title>
+  <style>
+    body { font-family: var(--vscode-font-family); color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); padding: 18px; }
+    h2 { margin: 0 0 16px 0; font-size: 18px; }
+    .row { margin-bottom: 14px; }
+    label { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    input[type="number"] { width: 120px; padding: 5px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
+    button { margin-top: 12px; padding: 7px 12px; border: 0; color: white; background: #0e639c; cursor: pointer; }
+    .hint { opacity: 0.8; font-size: 12px; margin-top: 4px; }
+    .kbd { background: rgba(128,128,128,0.2); border-radius: 4px; padding: 2px 5px; }
+  </style>
+</head>
+<body>
+  <h2>Scope Hover Settings</h2>
+
+  <div class="row">
+    <label><input id="enabled" type="checkbox" ${enabledChecked} /> Enable scope preview</label>
+  </div>
+
+  <div class="row">
+    <label><input id="copyOnLock" type="checkbox" ${copyOnLockChecked} /> Copy scope to clipboard on lock</label>
+    <div class="hint">Lock toggle hotkey: <span class="kbd">Ctrl+Alt+L</span></div>
+  </div>
+
+  <div class="row">
+    <label for="hoverDelay">Editor hover delay (ms)</label>
+    <input id="hoverDelay" type="number" min="0" step="1" value="${safeHoverDelay}" />
+  </div>
+
+  <div class="row">
+    <label><input id="hoverSticky" type="checkbox" ${hoverStickyChecked} /> Sticky hover</label>
+  </div>
+
+  <button id="saveBtn">Save</button>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const payload = {
+        enabled: document.getElementById("enabled").checked,
+        copyOnLock: document.getElementById("copyOnLock").checked,
+        hoverDelay: parseInt(document.getElementById("hoverDelay").value, 10) || 0,
+        hoverSticky: document.getElementById("hoverSticky").checked
+      };
+      vscode.postMessage({ type: "save", payload });
+    });
+  </script>
+</body>
+</html>`;
 }
 
 function unlockScope() {
@@ -409,16 +534,35 @@ function buildClipboardPayload(document, range) {
 
   const startLine = range.start.line + 1;
   const endLine = range.end.line + 1;
-  const code = document.getText(range);
-  const lang = document.languageId || "";
 
   return [
-    `FILE: ${displayPath}`,
-    `LINES: ${startLine}-${endLine}`,
+    "You are a code review quality checker, bug finder, and refactor agent.",
+    "Prioritize correctness first, then readability and performance.",
+    "Use repository search/tools for missing context.",
     "",
-    `\`\`\`${lang}`,
-    code,
-    "\`\`\`"
+    `TARGET_FILE: ${displayPath}`,
+    `TARGET_LINES: ${startLine}-${endLine}`,
+    "",
+    "PROCESS_RULES:",
+    "1) Infer intent from USER_REQUEST_LAST.",
+    "2) Intent must be one of: performance | simplify | explain | refactor_pattern | bug_risk | other",
+    "3) If ambiguous, ask 1 clarifying question before edits.",
+    "4) First analyze only TARGET_FILE + TARGET_LINES.",
+    "5) If more context is needed, name exact files/symbols.",
+    "6) Edit boundary rules (strict):",
+    "   - ONLY edit TARGET_FILE.",
+    "   - ONLY edit lines inside TARGET_LINES.",
+    "   - Any edit outside TARGET_LINES is FORBIDDEN.",
+    "   - Do not rename/move symbols outside TARGET_LINES.",
+    "7) Output format:",
+    "   - Unified diff patch only for TARGET_FILE",
+    "   - If no change needed, output exactly: NO_CHANGES",
+    "8) Diff requirements:",
+    "   - Use standard unified diff with @@ hunks",
+    "   - Keep hunks anchored to TARGET_LINES",
+    "   - Do not include explanations outside the diff",
+    "",
+    "USER_REQUEST_LAST:"
   ].join("\n");
 }
 

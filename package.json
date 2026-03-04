@@ -18,7 +18,8 @@
     "onCommand:scopeHover.lockScope",
     "onCommand:scopeHover.unlockScope",
     "onCommand:scopeHover.copyLockedScope",
-    "onCommand:scopeHover.toggleEnabled"
+    "onCommand:scopeHover.toggleEnabled",
+    "onCommand:scopeHover.openSettingsUI"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -42,6 +43,17 @@
       {
         "command": "scopeHover.toggleEnabled",
         "title": "Scope Hover: Toggle On/Off"
+      },
+      {
+        "command": "scopeHover.openSettingsUI",
+        "title": "Scope Hover: Open Settings UI"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "scopeHover.lockScope",
+        "key": "ctrl+alt+l",
+        "when": "editorTextFocus"
       }
     ],
     "configuration": {

@@ -1,0 +1,63 @@
+{
+  "name": "scope-hover-coder",
+  "displayName": "Scope Hover Coder",
+  "description": "Preview logical code scopes in the gutter and lock/copy scope context.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onCommand:scopeHover.clearPreview",
+    "onCommand:scopeHover.lockScope",
+    "onCommand:scopeHover.unlockScope",
+    "onCommand:scopeHover.copyLockedScope",
+    "onCommand:scopeHover.toggleEnabled"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "scopeHover.clearPreview",
+        "title": "Scope Hover: Clear Preview"
+      },
+      {
+        "command": "scopeHover.lockScope",
+        "title": "Scope Hover: Lock Scope (Toggle)"
+      },
+      {
+        "command": "scopeHover.unlockScope",
+        "title": "Scope Hover: Unlock Scope"
+      },
+      {
+        "command": "scopeHover.copyLockedScope",
+        "title": "Scope Hover: Copy Locked Scope"
+      },
+      {
+        "command": "scopeHover.toggleEnabled",
+        "title": "Scope Hover: Toggle On/Off"
+      }
+    ],
+    "configuration": {
+      "title": "Scope Hover Coder",
+      "properties": {
+        "scopeHover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable scope preview."
+        },
+        "scopeHover.copyOnLock": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically copy locked scope payload to clipboard."
+        }
+      }
+    }
+  }
+}
